@@ -23,6 +23,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     double [] x_arr = new double[30*20];
     double [] y_arr = new double[30*20];
     int frame_count = 0;
+    String id, sbp_ref, dbp_ref, hr_ref;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -30,12 +31,19 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
         setContentView(R.layout.measure_bp);
 
+        Bundle bundle = getIntent().getExtras();
+        id = bundle.getString("id");
+        sbp_ref = bundle.getString("sbp_ref");
+        dbp_ref = bundle.getString("dbp_ref");
+        hr_ref = bundle.getString("hr_ref");
+
         imageView = findViewById(R.id.imageView);
         imageView.setOnClickListener(this);
 
         btn_start = findViewById(R.id.btn_start);
         btn_start.setOnClickListener(this);
 
+        //Graph details
         GraphView graph = findViewById(R.id.graph);
         series1 = new LineGraphSeries<>(generateData());
 
@@ -66,6 +74,13 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         }
         if (v == btn_start){
             Intent intent = new Intent(getApplicationContext(), ViewResults.class);
+            intent.putExtra("id", id);
+            intent.putExtra("sbp_ref", sbp_ref);
+            intent.putExtra("dbp_ref", dbp_ref);
+            intent.putExtra("hr_ref", hr_ref);
+            intent.putExtra("sbp_app", sbp_ref);
+            intent.putExtra("dbp_app", dbp_ref);
+            intent.putExtra("hr_app", hr_ref);
             startActivity(intent);
         }
 

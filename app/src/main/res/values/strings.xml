@@ -1,8 +1,9 @@
 <resources>
     <string name="app_name">Mobile Blood Pressure</string>
-    <string name="version">Version 0.0.1</string>
+    <string name="version">Version 0.0.2</string>
 
     <string name="nwu">NWU</string>
+    <string name="api">https://script.google.com/macros/s/AKfycbw-J40C1PM9pyKHWmTLjtkjO_Ah9dgLGJ_kmZw28NpGv9M4jJGyqJVctqW5cnWf9g2C/exec</string>
 
     <string name="unit_bp">mmHg</string>
     <string name="unit_hr">BPM</string>

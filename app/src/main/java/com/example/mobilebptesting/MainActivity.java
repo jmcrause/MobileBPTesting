@@ -1,5 +1,7 @@
 package com.example.mobilebptesting;
 
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.OnBackPressedDispatcher;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
@@ -27,5 +29,14 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(getApplicationContext(), MeasureBP.class);
             startActivity(intent);
         });
+    }
+
+    @Override
+    public void onBackPressed() {
+        //super.onBackPressed();
+
+        //finish();
+        //System.exit(0);
+
     }
 }
