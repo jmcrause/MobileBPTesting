@@ -27,6 +27,10 @@ public class MainActivity extends AppCompatActivity {
 
         btn_measure.setOnClickListener(v -> {
             Intent intent = new Intent(getApplicationContext(), MeasureBP.class);
+            intent.putExtra("id", "0");
+            intent.putExtra("sbp_ref", "0");
+            intent.putExtra("dbp_ref", "0");
+            intent.putExtra("hr_ref", "0");
             startActivity(intent);
         });
     }

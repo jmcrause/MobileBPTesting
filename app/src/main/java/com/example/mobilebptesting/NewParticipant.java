@@ -50,7 +50,7 @@ public class NewParticipant extends AppCompatActivity implements View.OnClickLis
 
     //Data transferred to Google Drive
     private void addItemToSheet() {
-        final ProgressDialog loading = ProgressDialog.show(this, "Adding Item", "Please wait");
+        final ProgressDialog loading = ProgressDialog.show(this, "Adding participant", "Please wait");
         final String SBP = editTextSBP.getText().toString().trim();
         final String DBP = editTextDBP.getText().toString().trim();
         final String HR = editTextHR.getText().toString().trim();

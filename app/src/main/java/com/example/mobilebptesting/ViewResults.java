@@ -1,14 +1,27 @@
 package com.example.mobilebptesting;
 
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.android.volley.AuthFailureError;
+import com.android.volley.DefaultRetryPolicy;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.RetryPolicy;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class ViewResults extends AppCompatActivity implements View.OnClickListener {
 
@@ -23,6 +36,15 @@ public class ViewResults extends AppCompatActivity implements View.OnClickListen
 
         setContentView(R.layout.view_results);
 
+        imageView = findViewById(R.id.imageView);
+        imageView.setOnClickListener(this);
+
+        btn_save = findViewById(R.id.btn_save_measurements);
+        btn_save.setOnClickListener(this);
+
+        btn_try_again = findViewById(R.id.btn_try_again);
+        btn_try_again.setOnClickListener(this);
+
         //Get BP and HR data
         Bundle bundle = getIntent().getExtras();
         id = bundle.getString("id");
@@ -33,16 +55,9 @@ public class ViewResults extends AppCompatActivity implements View.OnClickListen
         dbp_app = bundle.getString("dbp_app");
         hr_app = bundle.getString("hr_app");
 
-
-        imageView = findViewById(R.id.imageView);
-        imageView.setOnClickListener(this);
-
-        btn_save = findViewById(R.id.btn_save_measurements);
-        btn_save.setOnClickListener(this);
-
-        btn_try_again = findViewById(R.id.btn_try_again);
-        btn_try_again.setOnClickListener(this);
-
+        if (id.equals("0")) {
+            btn_save.setText("Done");
+        }
 
         //Display application BP and HR data
         text_sbp_app = findViewById(R.id.text_sbp_app);
@@ -67,6 +82,52 @@ public class ViewResults extends AppCompatActivity implements View.OnClickListen
 
     }
 
+    //Data transferred to Google Drive
+    private void addItemToSheet() {
+        final ProgressDialog loading = ProgressDialog.show(this, "Saving measurements", "Please wait");
+
+        String api_url = getString(R.string.api);
+
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, api_url,
+                response -> {
+
+                    loading.dismiss();
+                    Toast.makeText(ViewResults.this, response,Toast.LENGTH_LONG).show();
+
+                    Intent intent = new Intent(getApplicationContext(), RateApp.class);
+                    startActivity(intent);
+
+                },
+                error -> Toast.makeText(ViewResults.this,error.getMessage(),Toast.LENGTH_LONG).show()
+        ){
+            @Nullable
+            @Override
+            protected Map<String, String> getParams() throws AuthFailureError {
+                Map<String, String> params = new HashMap<>();
+
+                params.put("action", "saveBP");
+                params.put("id", id);
+                params.put("sbp", sbp_app);
+                params.put("dbp", dbp_app);
+                params.put("hr", hr_app);
+
+                return params;
+            }
+        };
+
+        int socketTimeOut = 10000; // 10s
+
+        RetryPolicy retryPolicy = new DefaultRetryPolicy(socketTimeOut, 1, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT);
+        stringRequest.setRetryPolicy(retryPolicy);
+
+        RequestQueue queue = Volley.newRequestQueue(this);
+
+        queue.add(stringRequest);
+
+    }
+
+
+
     @Override
     public void onClick(View v) {
         if (v == imageView){
@@ -74,8 +135,14 @@ public class ViewResults extends AppCompatActivity implements View.OnClickListen
             startActivity(intent);
         }
         if (v == btn_save){
-            Intent intent = new Intent(getApplicationContext(), RateApp.class);
-            startActivity(intent);
+            if (id.equals("0")) {
+                Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+                startActivity(intent);
+            }
+            else {
+                addItemToSheet();
+            }
+
         }
         if (v == btn_try_again){
             Intent intent = new Intent(getApplicationContext(), MeasureBP.class);
