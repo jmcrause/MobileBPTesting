@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Mobile Blood Pressure</string>
+    <string name="version">Version 0.0.1</string>
+
+    <string name="nwu">NWU</string>
+
+    <string name="unit_bp">mmHg</string>
+    <string name="unit_hr">BPM</string>
+
+    <string name="save">Save &amp; Continue</string>
+    <string name="start_text">Press START to begin</string>
+    <string name="finger">Place your finger on the camera</string>
+    <string name="calibrating">Calibrating...</string>
+    <string name="error">Please keep still and try again</string>
+
+    <string name="title_new">Please enter the measured blood pressure and heart rate</string>
+
+    <string name="rate_desc">Please rate the app by selecting how much you agree or disagree with each statement.</string>
+    <string name="rate_q1">The app was straight forward to use.</string>
+    <string name="rate_q2">I had very little trouble taking my blood pressure measurement.</string>
+    <string name="rate_q3">I feel that I would require technical assistance to use this app.</string>
+    <string name="rate_q4">If it were available, I would personally use an app like this.</string>
+
+    <string name="contact_head">Contact details</string>
+    <string name="contact_disc">This is completely optional. These details will only be used to provide feedback regarding the study results and publications, and will not be shared with anyone.</string>
+</resources>
