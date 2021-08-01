@@ -9,6 +9,7 @@ import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
@@ -39,7 +40,6 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 import com.otaliastudios.cameraview.CameraView;
 import com.otaliastudios.cameraview.controls.Flash;
 import com.otaliastudios.cameraview.frame.Frame;
-import com.otaliastudios.cameraview.frame.FrameProcessor;
 import com.otaliastudios.cameraview.size.Size;
 
 import java.util.HashMap;
@@ -73,15 +73,31 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     double [] x_arr = new double[30*20];
     double [] y_arr = new double[30*20];
-    int frame_count = 0;
+
     String id, sbp_ref, dbp_ref, hr_ref, sbp_app, dbp_app, hr_app;
     double time_start;
     int attempts = 1;
     double reference_line = 0.5;
 
-    ImageProcessing imageProcessing;
+    //ImageProcessing imageProcessing;
+
+    float redAvg, greenAvg, blueAvg, redSD, greenSD, blueSD;
+
+
+    int frame_count = 0;
+    int process_frame = 0;
+
+    FrameProcessor [] frameProcessors = new FrameProcessor[30];
 
     String state = "initial";
+    Boolean active = false;
+
+    //Signal validation variables
+    int r_min = 128;
+    int g_min = 10;
+    int g_max = 128;
+    int b_max = 128;
+    int sd_max = 40;
 
     // ********************************************************************************************
     // ** Override methods, onCreate, onClick *****************************************************
@@ -116,12 +132,16 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
         progressBar = findViewById(R.id.progressBar);
 
+        for (int i = 0; i < 30; i++) {
+            frameProcessors[i] = new FrameProcessor();
+        }
+
         //Camera management
 
         camera = findViewById(R.id.camera);
         camera.setLifecycleOwner(this);
 
-        camera.addFrameProcessor(new FrameProcessor() {
+        camera.addFrameProcessor(new com.otaliastudios.cameraview.frame.FrameProcessor() {
             @Override
             @WorkerThread
             public void process(@NonNull Frame frame) {
@@ -134,27 +154,25 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                     byte[] data = frame.getData();
 
                     if (state == "active" || state == "calibration" || state == "measuring"){
-                        imageProcessing.decodeYUV420SPtoRGB(data.clone(), size.getHeight(), size.getWidth());
-                        float redAvg = imageProcessing.getRed();
-                        float greenAvg = imageProcessing.getGreen();
-                        float blueAvg = imageProcessing.getBlue();
+                        /*imageProcessing.decodeYUV420SPtoRGB(data.clone(), size.getHeight(), size.getWidth());
+                        imageProcessing.calculateStandardDeviation();
 
-                        //updateColor(redAvg, greenAvg, blueAvg);
+                        float redAvg = imageProcessing.getRedMean();
+                        float greenAvg = imageProcessing.getGreenMean();
+                        float blueAvg = imageProcessing.getBlueMean();
+                        float redSD = imageProcessing.getSdRed();
+                        float greenSD = imageProcessing.getSdGreen();
+                        float blueSD = imageProcessing.getSdBlue();*/
 
-                        if (redAvg > 200 && greenAvg < 10) {
-                            if (state == "active") {
-                                startCalibrationState();
-                            }
-                            addFrame((float)255.0-redAvg, time);
+                        frameProcessors[frame_count%30].setFrame(data.clone(), size.getHeight(), size.getWidth(), time);
+                        //updateSize(frame_count,process_frame);
+                        frame_count++;
+
+                        if (state == "start-calibration") {
+                            startCalibrationState();
                         }
-                        else {
-                            if (state == "calibration") {
-                                state = "recalibration";
-                            }
-                            else if (state == "measuring") {
-                                state = "error";
-                            }
-                        }
+
+
                     }
                 } /*else if (frame.getDataClass() == Image.class) {
                                                  Image data = frame.getData();
@@ -163,9 +181,6 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
             }
         });
-
-        // Process to get PPG
-        imageProcessing = new ImageProcessing();
 
 
         //Graph details
@@ -232,6 +247,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 measurementComplete();
             }
         };
+
+
+        myThread.start();
     }
 
     @Override
@@ -246,6 +264,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             }
             else {
                 state = "initial";
+                active = false;
 
                 btn_start.setText(getString(R.string.start));
                 mTextField.setText(getText(R.string.start_text));
@@ -461,12 +480,97 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
 
 
+    //Thread 1 : Process frames
+    //This thread waits till the program is connected to the manager and first frame is obtained
+    //After a frame is received, it calculates the avg value for further processing.
+    Thread myThread = new Thread(){
+        @Override
+        public void run(){
+            while (!active) {
+                Log.d("Thread", "Waiting for image");
+                //thread_state = "Waiting for active state";
+                try {
+                    Thread.sleep(100);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+            int buffer = 0;
+            while(active){
+
+                //thread_state = "Active";
+                buffer = frame_count - process_frame;
+
+                //We will wait till a new frame is received
+                while(buffer <= 0){
+                    //Sleeping part may lead to timing problems
+                    //thread_state = "Waiting for next image";
+                    try {
+                        Thread.sleep(11);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
+                    buffer = frame_count - process_frame;
+                }
+
+                //thread_state = "Processing";
+                int frame = process_frame%30;
+
+                frameProcessors[frame].decodeYUV420SPtoRGB();
+                frameProcessors[frame].calculateStandardDeviation();
+
+                redAvg = frameProcessors[frame].getRedMean();
+                greenAvg = frameProcessors[frame].getGreenMean();
+                blueAvg = frameProcessors[frame].getBlueMean();
+                redSD = frameProcessors[frame].getSdRed();
+                greenSD = frameProcessors[frame].getSdGreen();
+                blueSD = frameProcessors[frame].getSdBlue();
+
+                //mean(R) − σR ≥ Rmin
+                //mean(G) − σG ≥ Gmin
+                //mean(G) + σG ≤ Gmax
+                //mean(B) + σB ≤ Bmax
+                //σR, σG, σB < σmax
+
+
+
+                if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                    if (state == "active") {
+                        //startCalibrationState();
+                        state = "start-calibration";
+                    }
+                    Log.d("RedAvg", Float.toString(redAvg));
+                    addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                }
+                else {
+                    Log.d("RedAvg", Float.toString(redAvg));
+                    if (state == "calibration") {
+                        state = "recalibration";
+                        Log.d("State", "Recalibration");
+                    }
+                    else if (state == "measuring") {
+                        state = "error";
+                        Log.d("State", "Error");
+                    }
+                }
+
+                process_frame++;
+
+            }
+        }
+    };
+
+
+
+
     // ********************************************************************************************
     // ** State handling  *************************************************************************
     // ********************************************************************************************
 
     private void startActiveState() {
         state = "active";
+        active = true;
+
 
         mTextField.setText(getText(R.string.finger));
         btn_start.setText(getString(R.string.stop));
@@ -484,6 +588,15 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
         // Set reference values according to dissertation
 
+        //Rmin = 128, Gmin = 10, Gmax = 128, Bmax = 128 and
+        //σmax = 40.
+
+        //mean(R) − σR ≥ Rmin
+        //mean(G) − σG ≥ Gmin
+        //mean(G) + σG ≤ Gmax
+        //mean(B) + σB ≤ Bmax
+        //σR, σG, σB < σmax
+
     }
 
     private void restartCalibrationState() {
@@ -496,6 +609,14 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         reference_line = centerValue();
 
         // Change reference values according to dissertation
+
+        //Get min and max R, G and B
+
+        //mean(R) − σR ≥ Rmin
+        //mean(G) − σG ≥ Gmin
+        //mean(G) + σG ≤ Gmax
+        //mean(B) + σB ≤ Bmax
+        //σR, σG, σB < σmax
 
 
     }

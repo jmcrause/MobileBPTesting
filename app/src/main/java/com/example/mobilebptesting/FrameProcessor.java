@@ -1,6 +1,6 @@
 package com.example.mobilebptesting;
 
-public class ImageProcessing {
+public class FrameProcessor {
 
     private int sum_red = 0;
     private int sum_blue = 0;
@@ -16,23 +16,35 @@ public class ImageProcessing {
     private float sd_green;
     private float sd_blue;
 
+    public int width = 0, height = 0;
     private int frameSize = 1;
     private int [] pixels;
+    byte[] yuv420sp;
+    double time;
 
-    public void decodeYUV420SPtoRGB(byte[] yuv420sp, int width, int height) {
-
+    public void setFrame(byte[] frame, int frame_width, int frame_height, double t) {
+        width = frame_width;
+        height = frame_height;
         frameSize = width * height;
+        yuv420sp = frame.clone();
+        time = t;
+    }
 
-        pixels = new int[frameSize];
+    public byte[] getFrame () {
+        return yuv420sp;
+    }
+
+    public void decodeYUV420SPtoRGB() {
+
+        pixels = new int[frameSize/4];
 
         sum_red = 0;
         sum_blue = 0;
         sum_green = 0;
-        int count = 0;
-        for (int j = 0, yp = 0; j < height; j++) {
+        for (int j = 0, yp = 0; j < height; j+=2) {
             int uvp = frameSize + (j >> 1) * width, u = 0, v = 0;
-            for (int i = 0; i < width; i++, yp++) {
-                int y = (0xff & yuv420sp[yp]) - 16;
+            for (int i = 0; i < width; i+=2, yp++) {
+                int y = (0xff & yuv420sp[yp*4]) - 16;
                 if (y < 0) y = 0;
                 if ((i & 1) == 0) {
                     v = (0xff & yuv420sp[uvp++]) - 128;
@@ -50,8 +62,9 @@ public class ImageProcessing {
                 if (b < 0) b = 0;
                 else if (b > 262143) b = 262143;
 
+
                 int pixel = 0xff000000 | ((r << 6) & 0xff0000) | ((g >> 2) & 0xff00) | ((b >> 10) & 0xff);
-                pixels [count] = pixel;
+                pixels [yp] = pixel;
                 int red = (pixel >> 16) & 0xff;
                 sum_red += red;
 
@@ -81,7 +94,6 @@ public class ImageProcessing {
                     min_blue = blue;
                 }
 
-                count++;
             }
         }
     }
@@ -93,17 +105,17 @@ public class ImageProcessing {
 
     public float getRedMean() {
 
-        return ((float)sum_red / (float)frameSize);
+        return ((float)sum_red / (float)frameSize)*4;
     }
 
     public float getGreenMean() {
 
-        return ((float)sum_green / (float)frameSize);
+        return ((float)sum_green / (float)frameSize)*4;
     }
 
     public float getBlueMean() {
 
-        return ((float)sum_blue / (float)frameSize);
+        return ((float)sum_blue / (float)frameSize)*4;
     }
 
     /**
@@ -154,11 +166,11 @@ public class ImageProcessing {
         double var_green = 0;
         double var_blue = 0;
 
-        float mean_red = ((float)sum_red / (float)frameSize);
-        float mean_green = ((float)sum_green / (float)frameSize);
-        float mean_blue = ((float)sum_blue / (float)frameSize);
+        float mean_red = getRedMean();
+        float mean_green = getGreenMean();
+        float mean_blue = getBlueMean();
 
-        for (int i = 0; i < frameSize; i++) {
+        for (int i = 0; i < frameSize/4; i++) {
             int red = (pixels[i] >> 16) & 0xff;
             int green = (pixels[i] >> 8) & 0xff;
             int blue = (pixels[i]) & 0xff;
@@ -169,9 +181,9 @@ public class ImageProcessing {
 
         }
 
-        sd_red = (float) Math.sqrt(var_red/frameSize);
-        sd_green = (float) Math.sqrt(var_green/frameSize);
-        sd_blue = (float) Math.sqrt(var_blue/frameSize);
+        sd_red = (float) Math.sqrt(var_red/frameSize*4);
+        sd_green = (float) Math.sqrt(var_green/frameSize*4);
+        sd_blue = (float) Math.sqrt(var_blue/frameSize*4);
     }
 
     public float getSdRed() {
@@ -186,3 +198,5 @@ public class ImageProcessing {
         return sd_blue;
     }
 }
+
+
