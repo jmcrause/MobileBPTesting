@@ -89,8 +89,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     FrameProcessor [] frameProcessors = new FrameProcessor[30];
 
-    String state = "initial";
+    int state = 0;
     Boolean active = false;
+    Boolean run_thread = true;
 
     //Signal validation variables
     int r_min = 128;
@@ -99,9 +100,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     int b_max = 128;
     int sd_max = 40;
 
-    // ********************************************************************************************
-    // ** Override methods, onCreate, onClick *****************************************************
-    // ********************************************************************************************
+    /********************************************************************************************
+    Override methods, onCreate, onClick *****************************************************
+    ********************************************************************************************/
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -153,7 +154,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 if (frame.getDataClass() == byte[].class) {
                     byte[] data = frame.getData();
 
-                    if (state == "active" || state == "calibration" || state == "measuring"){
+                    if (state >= getResources().getInteger(R.integer.state_active)  && state <= getResources().getInteger(R.integer.state_measuring)){
                         /*imageProcessing.decodeYUV420SPtoRGB(data.clone(), size.getHeight(), size.getWidth());
                         imageProcessing.calculateStandardDeviation();
 
@@ -168,7 +169,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                         //updateSize(frame_count,process_frame);
                         frame_count++;
 
-                        if (state == "start-calibration") {
+                        if (state == getResources().getInteger(R.integer.state_start)) {
                             startCalibrationState();
                         }
 
@@ -210,7 +211,48 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
             public void onTick(long millisUntilFinished) {
 
-                if (state == "calibration") {
+                int progress = (int) (20000 - millisUntilFinished)/200;
+
+                switch (state) {
+                    case 0: //initial
+
+                        break;
+
+                    case 10: //active
+
+                        break;
+
+                    case 11: //start
+
+                        break;
+
+                    case 12: //restart
+                        restartCalibrationState();
+                        break;
+
+                    case 20: //calibration
+                        mTextField.setText(getText(R.string.calibrating) + " " + (millisUntilFinished / 1000 - 15) + "s");
+                        if (millisUntilFinished <= 15000) {
+                            startMeasuringState ();
+                        }
+                        progressBar.setProgress(progress);
+
+                        series1.resetData(generateData());
+                        break;
+                    case 30: //measuring
+                        mTextField.setText("HR: " + calculateHeartRate() + " BPM");
+
+                        progressBar.setProgress(progress);
+
+                        series1.resetData(generateData());
+
+                        break;
+                    case -1: //error
+                        startErrorState();
+                        break;
+                }
+
+                /*if (state == "calibration") {
                     mTextField.setText(getText(R.string.calibrating) + " " + (millisUntilFinished / 1000 - 15) + "s");
                     if (millisUntilFinished <= 15000) {
                         startMeasuringState ();
@@ -232,7 +274,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                     progressBar.setProgress(progress);
 
                     series1.resetData(generateData());
-                }
+                }*/
 
 
 
@@ -252,18 +294,25 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         myThread.start();
     }
 
+    /********************************************************************************************
+     Click Events ************************************************************************
+     ********************************************************************************************/
+
     @Override
     public void onClick(View v) {
+
         if (v == imageView){
+            run_thread = false;         //stop thread when going to different activity.
             Intent intent = new Intent(getApplicationContext(), MainActivity.class);
             startActivity(intent);
         }
+
         if (v == btn_start){
-            if (state == "initial" || state == "error") {
+            if (state == 0 || state == -1) {
                 startActiveState();
             }
             else {
-                state = "initial";
+                state = getResources().getInteger(R.integer.state_initial);
                 active = false;
 
                 btn_start.setText(getString(R.string.start));
@@ -281,9 +330,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
 
 
-    // ********************************************************************************************
-    // ** API Integration - at end of measurement *************************************************
-    // ********************************************************************************************
+    /********************************************************************************************
+     API Integration - at end of measurement *************************************************
+    ********************************************************************************************/
 
     //Data transferred to Google Drive
     private void uploadData() {
@@ -369,9 +418,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
 
 
-    // ********************************************************************************************
-    // ** Graph management ************************************************************************
-    // ********************************************************************************************
+    /********************************************************************************************
+    Graph management ************************************************************************
+    ********************************************************************************************/
 
     // Create DataPoint data for graph
     private DataPoint[] generateData() {
@@ -480,82 +529,179 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
 
 
-    //Thread 1 : Process frames
-    //This thread waits till the program is connected to the manager and first frame is obtained
-    //After a frame is received, it calculates the avg value for further processing.
+    /*********************************************************************************************
+     Thread 1 : Process frames
+     This thread waits till the program is connected to the manager and first frame is obtained
+     After a frame is received, it calculates the avg value for further processing.
+    *********************************************************************************************/
     Thread myThread = new Thread(){
         @Override
         public void run(){
-            while (!active) {
-                Log.d("Thread", "Waiting for image");
-                //thread_state = "Waiting for active state";
-                try {
-                    Thread.sleep(100);
-                }catch (Exception e){
-                    e.printStackTrace();
-                }
-            }
             int buffer = 0;
-            while(active){
+            while (run_thread) {
 
-                //thread_state = "Active";
-                buffer = frame_count - process_frame;
-
-                //We will wait till a new frame is received
-                while(buffer <= 0){
-                    //Sleeping part may lead to timing problems
-                    //thread_state = "Waiting for next image";
+                if (!active) {
+                    //Log.d("Thread", "Waiting for image");
                     try {
-                        Thread.sleep(11);
+                        Thread.sleep(100);
                     }catch (Exception e){
                         e.printStackTrace();
                     }
+                }
+
+                if (active){
+
+                    //thread_state = "Active";
                     buffer = frame_count - process_frame;
-                }
 
-                //thread_state = "Processing";
-                int frame = process_frame%30;
-
-                frameProcessors[frame].decodeYUV420SPtoRGB();
-                frameProcessors[frame].calculateStandardDeviation();
-
-                redAvg = frameProcessors[frame].getRedMean();
-                greenAvg = frameProcessors[frame].getGreenMean();
-                blueAvg = frameProcessors[frame].getBlueMean();
-                redSD = frameProcessors[frame].getSdRed();
-                greenSD = frameProcessors[frame].getSdGreen();
-                blueSD = frameProcessors[frame].getSdBlue();
-
-                //mean(R) − σR ≥ Rmin
-                //mean(G) − σG ≥ Gmin
-                //mean(G) + σG ≤ Gmax
-                //mean(B) + σB ≤ Bmax
-                //σR, σG, σB < σmax
-
-
-
-                if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
-                    if (state == "active") {
-                        //startCalibrationState();
-                        state = "start-calibration";
+                    //We will wait till a new frame is received
+                    while(buffer <= 0){
+                        //Sleeping part may lead to timing problems
+                        try {
+                            Thread.sleep(11);
+                        }catch (Exception e){
+                            e.printStackTrace();
+                        }
+                        buffer = frame_count - process_frame;
                     }
-                    Log.d("RedAvg", Float.toString(redAvg));
-                    addFrame((float)255.0-redAvg, frameProcessors[frame].time);
-                }
-                else {
-                    Log.d("RedAvg", Float.toString(redAvg));
-                    if (state == "calibration") {
-                        state = "recalibration";
-                        Log.d("State", "Recalibration");
-                    }
-                    else if (state == "measuring") {
-                        state = "error";
-                        Log.d("State", "Error");
-                    }
-                }
 
-                process_frame++;
+                    //thread_state = "Processing";
+                    int frame = process_frame%30;
 
+                    frameProcessors[frame].decodeYUV420SPtoRGB();
+                    frameProcessors[frame].calculateStandardDeviation();
+
+                    redAvg = frameProcessors[frame].getRedMean();
+                    greenAvg = frameProcessors[frame].getGreenMean();
+                    blueAvg = frameProcessors[frame].getBlueMean();
+                    redSD = frameProcessors[frame].getSdRed();
+                    greenSD = frameProcessors[frame].getSdGreen();
+                    blueSD = frameProcessors[frame].getSdBlue();
+
+                    //mean(R) − σR ≥ Rmin
+                    //mean(G) − σG ≥ Gmin
+                    //mean(G) + σG ≤ Gmax
+                    //mean(B) + σB ≤ Bmax
+                    //σR, σG, σB < σmax
+
+
+                    switch (state) {
+                        case 0: //initial
+
+                            break;
+
+                        case 10: //active
+                            Log.d("Current state", "Active");
+                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                                state = getResources().getInteger(R.integer.state_start);
+                                Log.d("Next State", "Start");
+                                //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                            }
+                            else {
+                                Log.d("Finger status", "No finger");
+                            }
+                            Log.d("RedAvg", Float.toString(redAvg));
+                            break;
+
+                        case 11: //start
+                            Log.d("Current state", "Start");
+                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                                state = getResources().getInteger(R.integer.state_start);
+                                Log.d("Next State", "Waiting for calibration state");
+                                //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                            }
+                            else {
+                                Log.d("Finger status", "No finger");
+                            }
+                            Log.d("RedAvg", Float.toString(redAvg));
+                            break;
+
+                        case 12: //restart
+                            Log.d("Current state", "Restart");
+                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                                state = getResources().getInteger(R.integer.state_start);
+                                Log.d("Next State", "Waiting for active state");
+                                //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                            }
+                            else {
+                                Log.d("Finger status", "No finger");
+                            }
+                            Log.d("RedAvg", Float.toString(redAvg));
+                            break;
+
+                        case 20: //calibration
+                            Log.d("Current state", "Calibration");
+                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                                state = getResources().getInteger(R.integer.state_start);
+                                //Log.d("Next State", "Waiting for calibration state");
+                                addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                            }
+                            else {
+                                Log.d("Finger status", "No finger");
+                                Log.d("Next State", "Recalibration");
+                                state = getResources().getInteger(R.integer.state_restart);
+                            }
+                            Log.d("RedAvg", Float.toString(redAvg));
+
+                            break;
+
+
+                        case 30: //measuring
+                            Log.d("Current state", "Measuring");
+                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                                state = getResources().getInteger(R.integer.state_start);
+                                //Log.d("Next State", "Waiting for calibration state");
+                                addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                            }
+                            else {
+                                Log.d("Finger status", "No finger");
+                                Log.d("Next State", "Error");
+                                state = getResources().getInteger(R.integer.state_error);
+                            }
+                            Log.d("RedAvg", Float.toString(redAvg));
+
+                            break;
+
+
+                        case -1: //error
+                            Log.d("Current state", "Error");
+                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                                //state = getResources().getInteger(R.integer.state_start);
+                                Log.d("Next State", "Waiting for start state");
+                                //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                            }
+                            else {
+                                Log.d("Finger status", "No finger");
+                                Log.d("Next State", "Error");
+                                state = getResources().getInteger(R.integer.state_error);
+                            }
+                            Log.d("RedAvg", Float.toString(redAvg));
+                            break;
+                    }
+
+                    /*if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
+                        if (state == "active") {
+                            //startCalibrationState();
+                            state = "start-calibration";
+                        }
+                        Log.d("RedAvg", Float.toString(redAvg));
+                        addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                    }
+                    else {
+                        Log.d("RedAvg", Float.toString(redAvg));
+                        if (state == "calibration") {
+                            state = "recalibration";
+                            Log.d("State", "Recalibration");
+                        }
+                        else if (state == "measuring") {
+                            state = "error";
+                            Log.d("State", "Error");
+                        }
+                    }*/
+
+                    process_frame++;
+
+                }
             }
         }
     };
@@ -563,12 +709,12 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
 
 
-    // ********************************************************************************************
-    // ** State handling  *************************************************************************
-    // ********************************************************************************************
+    /********************************************************************************************
+    State handling  *************************************************************************
+    ********************************************************************************************/
 
     private void startActiveState() {
-        state = "active";
+        state = getResources().getInteger(R.integer.state_active);
         active = true;
 
 
@@ -583,7 +729,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private void startCalibrationState() {
-        state = "calibration";
+        state = getResources().getInteger(R.integer.state_calibration);
         graphTimer.start();
 
         // Set reference values according to dissertation
@@ -605,7 +751,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private void startMeasuringState() {
-        state = "measuring";
+        state = getResources().getInteger(R.integer.state_measuring);
         reference_line = centerValue();
 
         // Change reference values according to dissertation
@@ -622,7 +768,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private void startErrorState() {
-        state = "error";
+        state = getResources().getInteger(R.integer.state_error);
         graphTimer.cancel();
 
         btn_start.setText(getString(R.string.start));
@@ -637,7 +783,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private void measurementComplete() {
-        state = "complete";
+        state = getResources().getInteger(R.integer.state_complete);
         loading = ProgressDialog.show(this, "Processing...", "Please wait");
 
         // Either calls showResults, when just measure was selected, or uploadData for participant
@@ -663,5 +809,11 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         startActivity(intent);
     }
 
-    // ********************************************************************************************
+    /********************************************************************************************/
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+
+        run_thread = false;  //stop thread when going to different activity.
+    }
 }

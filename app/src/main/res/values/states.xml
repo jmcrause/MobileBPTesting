@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="state_initial">0</integer>
+
+    <integer name="state_active">10</integer>
+    <integer name="state_start">11</integer>
+    <integer name="state_restart">12</integer>
+    <integer name="state_calibration">20</integer>
+    <integer name="state_measuring">30</integer>
+    <integer name="state_complete">50</integer>
+
+    <integer name="state_error">-1</integer>
+</resources>
