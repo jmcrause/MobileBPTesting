@@ -62,6 +62,9 @@ public class FrameProcessor {
                 if (b < 0) b = 0;
                 else if (b > 262143) b = 262143;
 
+                if (yp >= frameSize/4) {
+                    break;
+                }
 
                 int pixel = 0xff000000 | ((r << 6) & 0xff0000) | ((g >> 2) & 0xff00) | ((b >> 10) & 0xff);
                 pixels [yp] = pixel;
