@@ -434,7 +434,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         double max = 0;
 
 
-        for (int i = frame_count-count; i < frame_count; i++)
+        for (int i = process_frame-count; i < process_frame; i++)
         {
             if (i >= 0) {
                 if (y_arr[i] > max) {
@@ -446,9 +446,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             }
         }
 
-        for (int i = frame_count-count; i < frame_count; i++)
+        for (int i = process_frame-count; i < process_frame; i++)
         {
-            x = (i+count-frame_count)*0.033;
+            x = (i+count-process_frame)*0.033;
             if (i<0) {
                 y = 0;
             }
@@ -456,7 +456,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 y = (y_arr[i] - min)/(max-min); //Normalise value
             }
             DataPoint v = new DataPoint(x, y);
-            values[i-(frame_count-count)] = v;
+            values[i-(process_frame-count)] = v;
         }
         return values;
     }
@@ -465,10 +465,10 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     // To be called on every frame received to add to x and y global arrays
     private void addFrame(float color, double time) {
-        x_arr[frame_count] = time;
-        x_arr[frame_count] = x_arr[frame_count] - x_arr[0];
-        y_arr[frame_count] = color/55.0;
-        frame_count++;
+        x_arr[process_frame] = time;
+        x_arr[process_frame] = x_arr[process_frame] - x_arr[0];
+        y_arr[process_frame] = color/55.0;
+        //frame_count++;
     }
 
     private String arrayToString () {
@@ -606,7 +606,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                         case 11: //start
                             Log.d("Current state", "Start");
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
-                                state = getResources().getInteger(R.integer.state_start);
+                                //state = getResources().getInteger(R.integer.state_start);
                                 Log.d("Next State", "Waiting for calibration state");
                                 //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
                             }
@@ -619,7 +619,6 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                         case 12: //restart
                             Log.d("Current state", "Restart");
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
-                                state = getResources().getInteger(R.integer.state_start);
                                 Log.d("Next State", "Waiting for active state");
                                 //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
                             }
@@ -632,7 +631,6 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                         case 20: //calibration
                             Log.d("Current state", "Calibration");
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
-                                state = getResources().getInteger(R.integer.state_start);
                                 //Log.d("Next State", "Waiting for calibration state");
                                 addFrame((float)255.0-redAvg, frameProcessors[frame].time);
                             }
@@ -640,8 +638,14 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                                 Log.d("Finger status", "No finger");
                                 Log.d("Next State", "Recalibration");
                                 state = getResources().getInteger(R.integer.state_restart);
+                                Log.d("RedAvg", Float.toString(redAvg));
+                                Log.d("RedSD", Float.toString(redSD));
+                                Log.d("GreenAvg", Float.toString(greenAvg));
+                                Log.d("GreenSD", Float.toString(greenSD));
+                                Log.d("BlueAvg", Float.toString(blueAvg));
+                                Log.d("BlueSD", Float.toString(blueSD));
                             }
-                            Log.d("RedAvg", Float.toString(redAvg));
+                            //Log.d("RedAvg", Float.toString(redAvg));
 
                             break;
 
@@ -649,7 +653,6 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                         case 30: //measuring
                             Log.d("Current state", "Measuring");
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
-                                state = getResources().getInteger(R.integer.state_start);
                                 //Log.d("Next State", "Waiting for calibration state");
                                 addFrame((float)255.0-redAvg, frameProcessors[frame].time);
                             }
@@ -665,17 +668,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
                         case -1: //error
                             Log.d("Current state", "Error");
-                            if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
-                                //state = getResources().getInteger(R.integer.state_start);
-                                Log.d("Next State", "Waiting for start state");
-                                //addFrame((float)255.0-redAvg, frameProcessors[frame].time);
-                            }
-                            else {
-                                Log.d("Finger status", "No finger");
-                                Log.d("Next State", "Error");
-                                state = getResources().getInteger(R.integer.state_error);
-                            }
-                            Log.d("RedAvg", Float.toString(redAvg));
+
                             break;
                     }
 
@@ -726,6 +719,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         camera.setFlash(Flash.TORCH);
 
         frame_count = 0;
+        process_frame = 0;
     }
 
     private void startCalibrationState() {
@@ -768,7 +762,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private void startErrorState() {
-        state = getResources().getInteger(R.integer.state_error);
+        //state = getResources().getInteger(R.integer.state_error);
         graphTimer.cancel();
 
         btn_start.setText(getString(R.string.start));
@@ -783,7 +777,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private void measurementComplete() {
-        state = getResources().getInteger(R.integer.state_complete);
+        //state = getResources().getInteger(R.integer.state_complete);
         loading = ProgressDialog.show(this, "Processing...", "Please wait");
 
         // Either calls showResults, when just measure was selected, or uploadData for participant

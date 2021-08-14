@@ -41,6 +41,13 @@ public class FrameProcessor {
         sum_red = 0;
         sum_blue = 0;
         sum_green = 0;
+        min_red = 255;
+        min_blue = 255;
+        min_green = 255;
+        max_red = 0;
+        max_blue = 0;
+        max_green = 0;
+
         for (int j = 0, yp = 0; j < height; j+=2) {
             int uvp = frameSize + (j >> 1) * width, u = 0, v = 0;
             for (int i = 0; i < width; i+=2, yp++) {
