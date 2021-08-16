@@ -36,7 +36,7 @@
         app:cameraFrameProcessingFormat="0x23"
         app:cameraFrameProcessingMaxHeight="420"
         app:cameraFrameProcessingMaxWidth="420"
-        app:cameraFrameProcessingPoolSize="3"
+        app:cameraFrameProcessingPoolSize="2"
         app:cameraRequestPermissions="true"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"

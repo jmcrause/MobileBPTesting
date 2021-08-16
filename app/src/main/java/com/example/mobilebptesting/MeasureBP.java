@@ -75,7 +75,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     double [] y_arr = new double[30*20];
 
     String id, sbp_ref, dbp_ref, hr_ref, sbp_app, dbp_app, hr_app;
-    double time_start;
+    double time_start, t_0;
     int attempts = 1;
     double reference_line = 0.5;
 
@@ -86,6 +86,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     int frame_count = 0;
     int process_frame = 0;
+    int ppg_count = 0;
 
     FrameProcessor [] frameProcessors = new FrameProcessor[30];
 
@@ -434,7 +435,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         double max = 0;
 
 
-        for (int i = process_frame-count; i < process_frame; i++)
+        for (int i = ppg_count-count; i < ppg_count; i++)
         {
             if (i >= 0) {
                 if (y_arr[i] > max) {
@@ -446,9 +447,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             }
         }
 
-        for (int i = process_frame-count; i < process_frame; i++)
+        for (int i = ppg_count-count; i < ppg_count; i++)
         {
-            x = (i+count-process_frame)*0.033;
+            x = (i+count-ppg_count)*0.033;
             if (i<0) {
                 y = 0;
             }
@@ -456,7 +457,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 y = (y_arr[i] - min)/(max-min); //Normalise value
             }
             DataPoint v = new DataPoint(x, y);
-            values[i-(process_frame-count)] = v;
+            values[i-(ppg_count-count)] = v;
         }
         return values;
     }
@@ -465,18 +466,25 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     // To be called on every frame received to add to x and y global arrays
     private void addFrame(float color, double time) {
-        x_arr[process_frame] = time;
-        x_arr[process_frame] = x_arr[process_frame] - x_arr[0];
-        y_arr[process_frame] = color/55.0;
-        //frame_count++;
+        if (ppg_count == 0) {
+            t_0 = time;
+        }
+        x_arr[ppg_count] = time - t_0;
+        y_arr[ppg_count] = color/55.0;
+        ppg_count++;
     }
 
     private String arrayToString () {
-        String arr_str = "";
+        String arr_str = "" + y_arr[0];
 
-        for (int i = 0; i < frame_count; i++)
+        for (int i = 1; i < ppg_count; i++)
         {
             arr_str = arr_str + ", " + y_arr[i];
+        }
+        arr_str = arr_str + "\r\n" + x_arr[0];
+        for (int i = 1; i < ppg_count; i++)
+        {
+            arr_str = arr_str + ", " + x_arr[i];
         }
 
         return arr_str;
@@ -720,6 +728,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
         frame_count = 0;
         process_frame = 0;
+        ppg_count = 0;
+
     }
 
     private void startCalibrationState() {
