@@ -75,6 +75,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     double [] y_arr = new double[30*20];
     double [] x_resample = new double[30*20];
     double [] y_resample = new double[30*20];
+    double [] y_filtered = new double[30*20];
 
     String id, sbp_ref, dbp_ref, hr_ref, sbp_app, dbp_app, hr_app;
     double time_start, t_0;
@@ -102,6 +103,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     int g_max = 128;
     int b_max = 128;
     int sd_max = 40;
+
+    int filter_block = 4;
 
     /********************************************************************************************
     Override methods, onCreate, onClick *****************************************************
@@ -440,11 +443,11 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         for (int i = sample_count-count; i < sample_count; i++)
         {
             if (i >= 0) {
-                if (y_resample[i] > max) {
-                    max = y_resample[i];
+                if (y_filtered[i] > max) {
+                    max = y_filtered[i];
                 }
-                if (y_resample[i] < min) {
-                    min = y_resample[i];
+                if (y_filtered[i] < min) {
+                    min = y_filtered[i];
                 }
             }
         }
@@ -456,7 +459,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 y = 0;
             }
             else {
-                y = (y_resample[i] - min)/(max-min); //Normalise value
+                y = (y_filtered[i] - min)/(max-min); //Normalise value
             }
             DataPoint v = new DataPoint(x, y);
             values[i-(sample_count-count)] = v;
@@ -486,6 +489,16 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 if (i < 601) {
                     x_resample[i] = i*0.033;
                     y_resample[i] = (x_resample[i]-x_arr[ppg_count-1])*r + y_arr[ppg_count-1];
+                    y_filtered[i] = y_resample[i];
+
+                    // Apply moving average filter
+                    if (i > filter_block) {
+                        double filt_sum = 0;
+                        for (int f = i-filter_block+1;f<=i;f++) {
+                            filt_sum += y_resample[f];
+                        }
+                        y_filtered[i] = filt_sum/filter_block;
+                    }
                     sample_count = i;
                 }
             }
