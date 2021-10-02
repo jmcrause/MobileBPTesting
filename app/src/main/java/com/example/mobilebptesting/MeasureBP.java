@@ -73,6 +73,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     double [] x_arr = new double[30*20];
     double [] y_arr = new double[30*20];
+    double [] x_resample = new double[30*20];
+    double [] y_resample = new double[30*20];
 
     String id, sbp_ref, dbp_ref, hr_ref, sbp_app, dbp_app, hr_app;
     double time_start, t_0;
@@ -83,10 +85,10 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     float redAvg, greenAvg, blueAvg, redSD, greenSD, blueSD;
 
-
-    int frame_count = 0;
-    int process_frame = 0;
-    int ppg_count = 0;
+    int frame_count = 0;   // number of frames received
+    int process_frame = 0; // number of frames processed
+    int ppg_count = 0;    // used to track the number of ppg values calculated
+    int sample_count = 0; // used to track the number of resampled values calculated
 
     FrameProcessor [] frameProcessors = new FrameProcessor[30];
 
@@ -147,7 +149,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             @Override
             @WorkerThread
             public void process(@NonNull Frame frame) {
-                double time =  System.currentTimeMillis()/1000.0 - time_start;
+                double time =  System.currentTimeMillis()/1000.0;
                 Size size = frame.getSize();
                 //int format = frame.getFormat();
                 //int userRotation = frame.getRotationToUser();
@@ -431,33 +433,33 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         DataPoint[] values = new DataPoint[count];
 
         // Find Min and Max values
-        double min = 1;
+        double min = 255;
         double max = 0;
 
 
-        for (int i = ppg_count-count; i < ppg_count; i++)
+        for (int i = sample_count-count; i < sample_count; i++)
         {
             if (i >= 0) {
-                if (y_arr[i] > max) {
-                    max = y_arr[i];
+                if (y_resample[i] > max) {
+                    max = y_resample[i];
                 }
-                if (y_arr[i] < min) {
-                    min = y_arr[i];
+                if (y_resample[i] < min) {
+                    min = y_resample[i];
                 }
             }
         }
 
-        for (int i = ppg_count-count; i < ppg_count; i++)
+        for (int i = sample_count-count; i < sample_count; i++)
         {
-            x = (i+count-ppg_count)*0.033;
+            x = (i+count-sample_count)*0.033;
             if (i<0) {
                 y = 0;
             }
             else {
-                y = (y_arr[i] - min)/(max-min); //Normalise value
+                y = (y_resample[i] - min)/(max-min); //Normalise value
             }
             DataPoint v = new DataPoint(x, y);
-            values[i-(ppg_count-count)] = v;
+            values[i-(sample_count-count)] = v;
         }
         return values;
     }
@@ -470,7 +472,26 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             t_0 = time;
         }
         x_arr[ppg_count] = time - t_0;
-        y_arr[ppg_count] = color/55.0;
+        y_arr[ppg_count] = color;
+
+        // resample to 30 Hz
+        if (ppg_count > 0) {
+            int left_index = (int)(x_arr[ppg_count-1]*30);
+            int right_index = (int)(x_arr[ppg_count]*30);
+
+            // gradient
+            double r = (y_arr[ppg_count]-y_arr[ppg_count-1])/(x_arr[ppg_count]-x_arr[ppg_count-1]);
+
+            for (int i = left_index; i <= right_index; i++) {
+                if (i < 601) {
+                    x_resample[i] = i*0.033;
+                    y_resample[i] = (x_resample[i]-x_arr[ppg_count-1])*r + y_arr[ppg_count-1];
+                    sample_count = i;
+                }
+            }
+        }
+
+
         ppg_count++;
     }
 
@@ -640,7 +661,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                             Log.d("Current state", "Calibration");
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
                                 //Log.d("Next State", "Waiting for calibration state");
-                                addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                                addFrame(redAvg, frameProcessors[frame].time);
                             }
                             else {
                                 Log.d("Finger status", "No finger");
@@ -662,7 +683,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                             Log.d("Current state", "Measuring");
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
                                 //Log.d("Next State", "Waiting for calibration state");
-                                addFrame((float)255.0-redAvg, frameProcessors[frame].time);
+                                addFrame(redAvg, frameProcessors[frame].time);
                             }
                             else {
                                 Log.d("Finger status", "No finger");
