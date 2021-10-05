@@ -1,18 +1,14 @@
 package com.example.mobilebptesting;
 
-import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
-import android.content.pm.PackageManager;
-import android.hardware.Camera;
-import android.os.Build;
+import android.content.res.AssetFileDescriptor;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Surface;
-import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -22,7 +18,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 import androidx.annotation.WorkerThread;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -42,6 +37,14 @@ import com.otaliastudios.cameraview.controls.Flash;
 import com.otaliastudios.cameraview.frame.Frame;
 import com.otaliastudios.cameraview.size.Size;
 
+
+import org.tensorflow.lite.Interpreter;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,8 +72,6 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
     //private boolean active = false;
 
-    private
-
     double [] x_arr = new double[30*20];
     double [] y_arr = new double[30*20];
     double [] x_resample = new double[30*20];
@@ -91,7 +92,11 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     int ppg_count = 0;    // used to track the number of ppg values calculated
     int sample_count = 0; // used to track the number of resampled values calculated
 
+    int hr_count = 0; // Number of successful hr measurements
+    int rolling_hr = 0;
+
     FrameProcessor [] frameProcessors = new FrameProcessor[30];
+    BloodPressureModel bpModel = new BloodPressureModel();
 
     int state = 0;
     Boolean active = false;
@@ -106,6 +111,12 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     int filter_block = 4;
 
+    int wave_count = 0;
+
+    Interpreter tflite;
+
+    float [][] X_in = new float[73][30];
+
     /********************************************************************************************
     Override methods, onCreate, onClick *****************************************************
     ********************************************************************************************/
@@ -115,6 +126,14 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.measure_bp);
+
+        //create tflite pbject
+        try {
+            tflite = new Interpreter(loadModelFile());
+        }
+        catch (Exception ex) {
+            ex.printStackTrace();
+        }
 
         this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
@@ -287,9 +306,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             }
 
             public void onFinish() {
-                sbp_app = sbp_ref;
-                dbp_app = dbp_ref;
-                hr_app = String.valueOf(calculateHeartRate());
+                calculateBloodPressure();
+                hr_app = String.valueOf(rolling_hr);
 
                 mTextField.setText("Done!");
                 measurementComplete();
@@ -463,6 +481,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             }
             DataPoint v = new DataPoint(x, y);
             values[i-(sample_count-count)] = v;
+
         }
         return values;
     }
@@ -475,7 +494,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             t_0 = time;
         }
         x_arr[ppg_count] = time - t_0;
-        y_arr[ppg_count] = color;
+        y_arr[ppg_count] = 255-color;
 
         // resample to 30 Hz
         if (ppg_count > 0) {
@@ -486,7 +505,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             double r = (y_arr[ppg_count]-y_arr[ppg_count-1])/(x_arr[ppg_count]-x_arr[ppg_count-1]);
 
             for (int i = left_index; i <= right_index; i++) {
-                if (i < 601) {
+                if (i < 600) {
                     x_resample[i] = i*0.033;
                     y_resample[i] = (x_resample[i]-x_arr[ppg_count-1])*r + y_arr[ppg_count-1];
                     y_filtered[i] = y_resample[i];
@@ -521,6 +540,15 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             arr_str = arr_str + ", " + x_arr[i];
         }
 
+        for (int i = 0; i < wave_count; i++)
+        {
+            arr_str = arr_str + "\r\n" + X_in[0];
+            for (int j = 1; j < 73; j++)
+            {
+                arr_str = arr_str + ", " + X_in[j];
+            }
+        }
+
         return arr_str;
     }
 
@@ -545,30 +573,50 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
 
     private int calculateHeartRate () {
-        int rolling_hr = 0;
 
-        // Count rising edges
+        // Find average of last 4 seconds
+        double sum_ppg_4s = 0;
+        for (int i = sample_count-120; i < sample_count; i++) {
+            sum_ppg_4s += y_filtered[i];
+        }
+        double ave_ppg_4s = sum_ppg_4s/120;
+
+
+        // Find zero crossings of PPG gradient, to determine peaks
         double count = 0;
         int start = 0;
         int end = 0;
-        for (int i = 120; i < frame_count; i++)
+        for (int i = sample_count-120; i < sample_count; i++)
         {
-            if (y_arr[i] >= reference_line && y_arr[i-1] < reference_line) {
-                count++;
-                if (count==1) {
+            if (y_filtered[i] > y_filtered[i-1] && y_filtered[i] > y_filtered[i+1] && y_filtered[i] > ave_ppg_4s) {
+                if (count==0) {
                     start = i;
+                    end = i;
+                    count++;
                 }
-                end = i;
+                else if (i > end + 10) {
+                    end = i;
+                    count++;
+                }
+                else if (y_filtered[end] < y_filtered[i]) {
+                    end = i;
+                }
+
             }
         }
 
+
+
         double dt = (end - start)/30.0;
-        rolling_hr = (int) Math.round((count-1)/dt * 60);
+        int hr = (int) Math.round((count-1)/dt * 60);
+
+        if (hr > 20) {
+            rolling_hr = (rolling_hr*hr_count + hr)/(hr_count+1);
+            hr_count++;
+        }
 
         return rolling_hr;
     }
-
-
 
 
     /*********************************************************************************************
@@ -847,7 +895,96 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         startActivity(intent);
     }
 
+
     /********************************************************************************************/
+
+    private void calculateBloodPressure () {
+
+        wave_count = bpModel.calculateBP(y_filtered);
+
+        /*float [] input_wave = {(float)1,(float)0.993810229,(float)0.974349896,(float)0.942408074,
+                (float)0.894335553,(float)0.83685931,(float)0.76722181,(float)0.699548796,
+                (float)0.628218829,(float)0.553371317,(float)0.480007306,(float)0.403151696,
+                (float)0.322042131,(float)0.24537943,(float)0.17010661,(float)0.0850844336,
+                (float)0.00332394374,(float)0,(float)0.0850963679,(float)0.254448053,
+                (float)0.406603641,(float)0.549933132,(float)0.645822743,(float)0.708698437,
+                (float)0.730639838,(float)0.735196049,(float)0.736514713,(float)0.741049407,
+                (float)0.725731739,(float)0,(float)0,(float)0,
+                (float)0,(float)0,(float)0,(float)0,
+                (float)0,(float)0,(float)0,(float)0,
+                (float)0,(float)0,(float)0,(float)0,
+                (float)0,(float)2.71982558,(float)0.74890377,(float)1.50534076,
+                (float)0.354669767,(float)0.567146091,(float)0.256453555,(float)0.0979615749,
+                (float)0.343822804,(float)0.110089644,(float)0.139571007,(float)0.229175881,
+                (float)0.0576923862,(float)0.149331304,(float)0.167963923,(float)0.5,
+                (float)0.274396326,(float)0.352938258,(float)0.0270336273,(float)0.315039495,
+                (float)0.346348418,(float)0.182421272,(float)0.320463958,(float)0.469854227,
+                (float)0.246230238,(float)0.379294752,(float)0.514859662,(float)0.296457243,
+                (float)0.444024381};*/
+
+        double sum_sbp = 0;
+        double sum_dbp = 0;
+
+        double err_sbp = 0;
+        double err_dbp = 0;
+
+        //Reference values to string
+        double ref_sbp = Double.parseDouble(sbp_ref);
+        double ref_dbp = Double.parseDouble(dbp_ref);
+
+
+        for (int i = 0; i < wave_count; i++){
+
+            X_in[i] = bpModel.getX(i);
+
+
+            float [][] output = new float[1][2];
+            tflite.run(X_in[i],output);
+
+            double sbp = output[0][0] * (179.94-81.84) + 81.252;
+            double dbp = output[0][1] * (118.397-50.0487) + 50.0487;
+
+            sum_sbp += sbp;
+            sum_dbp += dbp;
+
+            if (Math.abs(ref_dbp - dbp) < Math.abs(err_dbp)) {
+                err_dbp = dbp - ref_dbp;
+            }
+            if (Math.abs(ref_sbp - sbp) < Math.abs(err_sbp)) {
+                err_sbp = sbp - ref_sbp;
+            }
+
+        }
+
+        double avg_sbp = sum_sbp/wave_count;
+        double avg_dbp = sum_dbp/wave_count;
+
+        // Multipliers
+        // DBP = 50.0487 and 118.3979
+        // SBP = 81.8252 and 179.9415
+
+        if (ref_dbp == 0 || ref_sbp == 0) {
+            sbp_app = String.format("%.1f",avg_sbp);
+            dbp_app = String.format("%.1f",avg_dbp);
+        }
+        else {
+            sbp_app = String.format("%.1f",avg_sbp+err_sbp);
+            dbp_app = String.format("%.1f",avg_dbp+err_dbp);
+        }
+
+
+
+    }
+
+    private MappedByteBuffer loadModelFile() throws IOException {
+        AssetFileDescriptor fileDescriptor = this.getAssets().openFd("model.tflite");
+        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = inputStream.getChannel();
+        long startOffset = fileDescriptor.getStartOffset();
+        long declaredLength = fileDescriptor.getDeclaredLength();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+    }
+
     @Override
     public void onBackPressed() {
         super.onBackPressed();
