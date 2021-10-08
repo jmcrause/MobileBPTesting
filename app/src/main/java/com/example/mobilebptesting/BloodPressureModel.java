@@ -1,6 +1,7 @@
 package com.example.mobilebptesting;
 
 import android.content.res.AssetFileDescriptor;
+import android.util.Log;
 
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -61,7 +62,7 @@ public class BloodPressureModel {
                 double single_max = 0;
                 double single_min = 255;
                 // Find min and max values for normalisation
-                for (int j = peaks[i]-left_10p; j < right_5p; j++) {
+                for (int j = peaks[i]-left_10p; j < peaks[i]+T+right_5p; j++) {
                     if (ppg[j] < single_min){
                         single_min = ppg[j];
                     }
@@ -89,7 +90,7 @@ public class BloodPressureModel {
                 double [] dft_mag_norm = new double[14];
                 double [] dft_phase_norm = new double[14];
 
-                double mag_max = 0;
+                /*double mag_max = 0;
                 double mag_min = 255;
                 for (int j = 0; j < 14; j++) {
                     if (dft_mag[j] < mag_min){
@@ -98,15 +99,21 @@ public class BloodPressureModel {
                     if (dft_mag[j] > mag_max){
                         mag_max = dft_mag[j];
                     }
-                }
+                }*/
                 for (int j = 0; j < 14; j++) {
-                    dft_mag_norm[j] = (dft_mag[j]-mag_min)/(mag_max-mag_min);
+                    dft_mag_norm[j] = dft_mag[j];//(dft_mag[j]-mag_min)/(mag_max-mag_min);
                     dft_phase_norm[j] = (dft_phase[j] + Math.PI)/(2*Math.PI);
                 }
 
                 // Join FFT and time signals,  and input into model
 
                 X_in[waves_count] = concat(single_wave,dft_mag_norm,dft_phase_norm);
+
+                if (waves_count == 0) {
+                    for (int j = 0; j < 73; j++) {
+                        Log.d("X Wave " + j, "" + X_in[waves_count][j]);
+                    }
+                }
 
                 waves_count++;
 

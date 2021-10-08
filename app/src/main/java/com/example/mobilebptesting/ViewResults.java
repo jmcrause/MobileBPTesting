@@ -58,10 +58,6 @@ public class ViewResults extends AppCompatActivity implements View.OnClickListen
         dbp_app = bundle.getString("dbp_app");
         hr_app = bundle.getString("hr_app");
 
-        if (id.equals("0")) {
-            btn_save.setText("Done");
-        }
-
         //Display application BP and HR data
         text_sbp_app = findViewById(R.id.text_sbp_app);
         text_sbp_app.setText(sbp_app);
@@ -82,6 +78,14 @@ public class ViewResults extends AppCompatActivity implements View.OnClickListen
         text_hr_ref = findViewById(R.id.text_hr_ref);
         text_hr_ref.setText(hr_ref);
 
+
+        if (id.equals("0")) {
+            btn_save.setText("Done");
+
+            text_sbp_ref.setText("N/A");
+            text_dbp_ref.setText("N/A");
+            text_hr_ref.setText("N/A");
+        }
 
     }
 

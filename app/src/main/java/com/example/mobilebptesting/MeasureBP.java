@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -80,8 +81,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     String id, sbp_ref, dbp_ref, hr_ref, sbp_app, dbp_app, hr_app;
     double time_start, t_0;
-    int attempts = 1;
-    double reference_line = 0.5;
+    int attempts = 0;
+    //double reference_line = 0.5;
 
     //ImageProcessing imageProcessing;
 
@@ -108,6 +109,12 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     int g_max = 128;
     int b_max = 128;
     int sd_max = 40;
+
+    int r_min_calib = 255;
+    int g_min_calib = 255;
+    int g_max_calib = 10;
+    int b_max_calib = 0;
+    int sd_max_calib = 0;
 
     int filter_block = 4;
 
@@ -333,6 +340,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
         if (v == btn_start){
             if (state == 0 || state == -1) {
+                attempts++;
                 startActiveState();
             }
             else {
@@ -457,8 +465,11 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         double min = 255;
         double max = 0;
 
+        int start = sample_count-count;
+        int end = sample_count;
 
-        for (int i = sample_count-count; i < sample_count; i++)
+
+        for (int i = start; i < end; i++)
         {
             if (i >= 0) {
                 if (y_filtered[i] > max) {
@@ -470,9 +481,9 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             }
         }
 
-        for (int i = sample_count-count; i < sample_count; i++)
+        for (int i = start; i < end; i++)
         {
-            x = (i+count-sample_count)*0.033;
+            x = (i-start)*0.033;
             if (i<0) {
                 y = 0;
             }
@@ -480,7 +491,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 y = (y_filtered[i] - min)/(max-min); //Normalise value
             }
             DataPoint v = new DataPoint(x, y);
-            values[i-(sample_count-count)] = v;
+            values[i-start] = v;
 
         }
         return values;
@@ -542,17 +553,18 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
         for (int i = 0; i < wave_count; i++)
         {
-            arr_str = arr_str + "\r\n" + X_in[0];
+            arr_str = arr_str + "\r\n" + X_in[i][0];
             for (int j = 1; j < 73; j++)
             {
-                arr_str = arr_str + ", " + X_in[j];
+                arr_str = arr_str + ", " + X_in[i][j];
             }
         }
 
         return arr_str;
     }
 
-    private double centerValue () {
+
+    /*private double centerValue () {
         double center = 0;
         // Find Min and Max values
         double min = 1;
@@ -570,7 +582,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         center = (max - min)/2.0;
 
         return center;
-    }
+    }*/
 
     private int calculateHeartRate () {
 
@@ -723,6 +735,19 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                             if (redAvg - redSD >= r_min &&  greenAvg + greenSD <= g_max && blueAvg + blueSD <= b_max) {
                                 //Log.d("Next State", "Waiting for calibration state");
                                 addFrame(redAvg, frameProcessors[frame].time);
+
+                                if (r_min_calib > redAvg){
+                                    r_min_calib = (int) Math.floor(redAvg);
+                                }
+                                if (g_min_calib > greenAvg) {
+                                    g_min_calib = (int) Math.floor(greenAvg);
+                                }
+                                if (g_max_calib < greenAvg) {
+                                    g_max_calib = (int) Math.ceil(greenAvg);
+                                }
+                                if (b_max_calib < blueAvg) {
+                                    b_max_calib = (int) Math.ceil(blueAvg);
+                                }
                             }
                             else {
                                 Log.d("Finger status", "No finger");
@@ -812,6 +837,12 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         process_frame = 0;
         ppg_count = 0;
 
+        r_min = 128;
+        g_min = 10;
+        g_max = 128;
+        b_max = 128;
+        sd_max = 40;
+
     }
 
     private void startCalibrationState() {
@@ -829,16 +860,24 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         //mean(B) + σB ≤ Bmax
         //σR, σG, σB < σmax
 
+        r_min_calib = 255;
+        g_min_calib = 255;
+        g_max_calib = 10;
+        b_max_calib = 0;
+        sd_max_calib = 0;
+
+
     }
 
     private void restartCalibrationState() {
         startActiveState();
         graphTimer.cancel();
+
     }
 
     private void startMeasuringState() {
         state = getResources().getInteger(R.integer.state_measuring);
-        reference_line = centerValue();
+        //reference_line = centerValue();
 
         // Change reference values according to dissertation
 
@@ -850,6 +889,12 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         //mean(B) + σB ≤ Bmax
         //σR, σG, σB < σmax
 
+
+        r_min = r_min_calib-5;
+        g_min = g_min_calib-5;
+        g_max = g_max_calib+10;
+        b_max = b_max_calib+10;
+        sd_max = 40;
 
     }
 
@@ -870,6 +915,11 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
 
     private void measurementComplete() {
         //state = getResources().getInteger(R.integer.state_complete);
+
+        imageViewCamera.setVisibility(View.VISIBLE);
+
+        camera.setFlash(Flash.OFF);
+
         loading = ProgressDialog.show(this, "Processing...", "Please wait");
 
         // Either calls showResults, when just measure was selected, or uploadData for participant
@@ -932,10 +982,17 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         double ref_sbp = Double.parseDouble(sbp_ref);
         double ref_dbp = Double.parseDouble(dbp_ref);
 
+        Log.d("Wave count: ", "" + wave_count);
 
         for (int i = 0; i < wave_count; i++){
 
             X_in[i] = bpModel.getX(i);
+
+            if (i == 0) {
+                for (int j = 0; j < 73; j++) {
+                    Log.d("X Wave test1 " + j, "" + X_in[i][j]);
+                }
+            }
 
 
             float [][] output = new float[1][2];
@@ -954,6 +1011,10 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
                 err_sbp = sbp - ref_sbp;
             }
 
+        }
+
+        for (int j = 0; j < 73; j++) {
+            Log.d("X Wave test2 " + j, "" + X_in[0][j]);
         }
 
         double avg_sbp = sum_sbp/wave_count;
