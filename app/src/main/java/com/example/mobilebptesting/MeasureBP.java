@@ -1009,14 +1009,20 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             double sbp = output[0][0] * (179.94-81.84) + 81.252;
             double dbp = output[0][1] * (118.397-50.0487) + 50.0487;
 
-            sum_sbp += sbp;
+            double adj_sbp;
+            double adj_dbp;
+            // Experimental adjustment
+            adj_sbp = sbp * 0.43 + 44.2;
+            adj_dbp = dbp * 0.3 + 55;
+
+            sum_sbp += adj_sbp;
             sum_dbp += dbp;
 
-            if (Math.abs(ref_dbp - dbp) < Math.abs(err_dbp)) {
-                err_dbp = dbp - ref_dbp;
+            if (Math.abs(ref_dbp - adj_dbp) < Math.abs(err_dbp)) {
+                err_dbp = adj_dbp - ref_dbp;
             }
-            if (Math.abs(ref_sbp - sbp) < Math.abs(err_sbp)) {
-                err_sbp = sbp - ref_sbp;
+            if (Math.abs(ref_sbp - adj_sbp) < Math.abs(err_sbp)) {
+                err_sbp = adj_sbp - ref_sbp;
             }
 
         }
@@ -1032,24 +1038,22 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         // DBP = 50.0487 and 118.3979
         // SBP = 81.8252 and 179.9415
 
-        double adj_sbp;
-        double adj_dbp;
+        double disp_sbp, disp_dbp;
 
         if (ref_dbp == 0 || ref_sbp == 0) {
             // Experimental adjustment
-            adj_sbp = avg_sbp * 0.4 + 44.2;
-            adj_dbp = avg_dbp * 0.3 + 55;
+            disp_sbp = avg_sbp;
+            disp_dbp = avg_dbp;
         }
         else {
             //Calibration stage?
 
-            // Experimental adjustment
-            adj_sbp = (avg_sbp + err_sbp) * 0.4 + 44.2;
-            adj_dbp = (avg_dbp + err_dbp) * 0.3 + 55;
+            disp_sbp = ref_sbp + err_sbp;
+            disp_dbp = ref_dbp + err_dbp;
         }
 
-        sbp_app = String.format("%.1f",adj_sbp);
-        dbp_app = String.format("%.1f",adj_dbp);
+        sbp_app = String.format("%.1f",disp_sbp);
+        dbp_app = String.format("%.1f",disp_dbp);
 
 
 
