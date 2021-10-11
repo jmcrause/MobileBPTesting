@@ -73,8 +73,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
     }
     //private boolean active = false;
 
-    double [] x_arr = new double[30*20];
-    double [] y_arr = new double[30*20];
+    double [] x_arr = new double[40*20];
+    double [] y_arr = new double[40*20];
     double [] x_resample = new double[30*20];
     double [] y_resample = new double[30*20];
     double [] y_filtered = new double[30*20];
@@ -504,38 +504,41 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         if (ppg_count == 0) {
             t_0 = time;
         }
-        x_arr[ppg_count] = time - t_0;
-        y_arr[ppg_count] = 255-color;
+        if (ppg_count < 40*20) {
+            x_arr[ppg_count] = time - t_0;
+            y_arr[ppg_count] = 255-color;
 
-        // resample to 30 Hz
-        if (ppg_count > 0) {
-            int left_index = (int)(x_arr[ppg_count-1]*30);
-            int right_index = (int)(x_arr[ppg_count]*30);
+            // resample to 30 Hz
+            if (ppg_count > 0) {
+                int left_index = (int)(x_arr[ppg_count-1]*30);
+                int right_index = (int)(x_arr[ppg_count]*30);
 
-            // gradient
-            double r = (y_arr[ppg_count]-y_arr[ppg_count-1])/(x_arr[ppg_count]-x_arr[ppg_count-1]);
+                // gradient
+                double r = (y_arr[ppg_count]-y_arr[ppg_count-1])/(x_arr[ppg_count]-x_arr[ppg_count-1]);
 
-            for (int i = left_index; i <= right_index; i++) {
-                if (i < 600) {
-                    x_resample[i] = i*0.033;
-                    y_resample[i] = (x_resample[i]-x_arr[ppg_count-1])*r + y_arr[ppg_count-1];
-                    y_filtered[i] = y_resample[i];
+                for (int i = left_index; i <= right_index; i++) {
+                    if (i < 600) {
+                        x_resample[i] = i*0.033;
+                        y_resample[i] = (x_resample[i]-x_arr[ppg_count-1])*r + y_arr[ppg_count-1];
+                        y_filtered[i] = y_resample[i];
 
-                    // Apply moving average filter
-                    if (i > filter_block) {
-                        double filt_sum = 0;
-                        for (int f = i-filter_block+1;f<=i;f++) {
-                            filt_sum += y_resample[f];
+                        // Apply moving average filter
+                        if (i > filter_block) {
+                            double filt_sum = 0;
+                            for (int f = i-filter_block+1;f<=i;f++) {
+                                filt_sum += y_resample[f];
+                            }
+                            y_filtered[i] = filt_sum/filter_block;
                         }
-                        y_filtered[i] = filt_sum/filter_block;
+                        sample_count = i;
                     }
-                    sample_count = i;
                 }
             }
+
+            ppg_count++;
         }
 
 
-        ppg_count++;
     }
 
     private String arrayToString () {
@@ -861,7 +864,7 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         //σR, σG, σB < σmax
 
         r_min_calib = 255;
-        g_min_calib = 255;
+        g_min_calib = 128;
         g_max_calib = 10;
         b_max_calib = 0;
         sd_max_calib = 0;
@@ -890,11 +893,16 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         //σR, σG, σB < σmax
 
 
-        r_min = r_min_calib-5;
-        g_min = g_min_calib-5;
-        g_max = g_max_calib+10;
-        b_max = b_max_calib+10;
+        r_min = (int) (r_min_calib-(r_min_calib * 0.2));
+        g_min = (int) (g_min_calib-(g_min_calib*0.2));
+        g_max = g_max_calib*2;
+        b_max = b_max_calib*2;
         sd_max = 40;
+
+        Log.d("r_min:",Integer.toString(r_min));
+        Log.d("g_min:",Integer.toString(g_min));
+        Log.d("g_max:",Integer.toString(g_max));
+        Log.d("b_max:",Integer.toString(b_max));
 
     }
 
@@ -1024,14 +1032,24 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         // DBP = 50.0487 and 118.3979
         // SBP = 81.8252 and 179.9415
 
+        double adj_sbp;
+        double adj_dbp;
+
         if (ref_dbp == 0 || ref_sbp == 0) {
-            sbp_app = String.format("%.1f",avg_sbp);
-            dbp_app = String.format("%.1f",avg_dbp);
+            // Experimental adjustment
+            adj_sbp = avg_sbp * 0.4 + 44.2;
+            adj_dbp = avg_dbp * 0.3 + 55;
         }
         else {
-            sbp_app = String.format("%.1f",avg_sbp+err_sbp);
-            dbp_app = String.format("%.1f",avg_dbp+err_dbp);
+            //Calibration stage?
+
+            // Experimental adjustment
+            adj_sbp = (avg_sbp + err_sbp) * 0.4 + 44.2;
+            adj_dbp = (avg_dbp + err_dbp) * 0.3 + 55;
         }
+
+        sbp_app = String.format("%.1f",adj_sbp);
+        dbp_app = String.format("%.1f",adj_dbp);
 
 
 
