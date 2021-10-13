@@ -983,8 +983,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
         double sum_sbp = 0;
         double sum_dbp = 0;
 
-        double err_sbp = 0;
-        double err_dbp = 0;
+        double err_sbp = 100;
+        double err_dbp = 100;
 
         //Reference values to string
         double ref_sbp = Double.parseDouble(sbp_ref);
@@ -1018,10 +1018,8 @@ public class MeasureBP extends AppCompatActivity implements View.OnClickListener
             sum_sbp += adj_sbp;
             sum_dbp += dbp;
 
-            if (Math.abs(ref_dbp - adj_dbp) < Math.abs(err_dbp)) {
+            if (Math.abs(ref_dbp - adj_dbp) + Math.abs(ref_sbp - adj_sbp) < Math.abs(err_dbp) + Math.abs(err_sbp)) {
                 err_dbp = adj_dbp - ref_dbp;
-            }
-            if (Math.abs(ref_sbp - adj_sbp) < Math.abs(err_sbp)) {
                 err_sbp = adj_sbp - ref_sbp;
             }
 
